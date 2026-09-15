@@ -66,10 +66,10 @@ final class StatusBarController {
     private let panel: NSPanel
     private var itemsCancellable: AnyCancellable?
     private var outsideClickMonitor: Any?
-    private var closeWorkItem: DispatchWorkItem?
+    private let closeAction = DebouncedAction()
     private var pinnedOpen = false
 
-    private let panelSize = NSSize(width: 320, height: 420)
+    private let panelSize = NSSize(width: PanelMetrics.width, height: PanelMetrics.menuBarHeight)
     private let gapBelowMenuBar: CGFloat = 8
 
     init(store: StashStore, settings: AppSettings) {
@@ -118,15 +118,15 @@ final class StatusBarController {
     /// user explicitly clicked it open.
     private func noteHover(_ hovering: Bool) {
         if hovering {
-            closeWorkItem?.cancel()
+            closeAction.cancel()
             openPopover()
         } else if !pinnedOpen {
-            scheduleClose()
+            closeAction.fire(after: 0.35) { [weak self] in self?.closePopover() }
         }
     }
 
     private func openPopover() {
-        closeWorkItem?.cancel()
+        closeAction.cancel()
         guard !panel.isVisible, let button = statusItem.button, let buttonWindow = button.window else { return }
 
         let buttonFrameOnScreen = buttonWindow.convertToScreen(button.convert(button.bounds, to: nil))
@@ -146,13 +146,6 @@ final class StatusBarController {
             self?.pinnedOpen = false
             self?.closePopover()
         }
-    }
-
-    private func scheduleClose() {
-        closeWorkItem?.cancel()
-        let work = DispatchWorkItem { [weak self] in self?.closePopover() }
-        closeWorkItem = work
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35, execute: work)
     }
 
     private func closePopover() {

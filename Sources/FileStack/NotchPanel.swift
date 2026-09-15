@@ -6,10 +6,10 @@ import UniformTypeIdentifiers
 final class NotchController: ObservableObject {
     @Published fileprivate(set) var isExpanded = false
 
-    let panel: NSPanel
-    private var collapseWorkItem: DispatchWorkItem?
+    private let panel: NSPanel
+    private let collapseAction = DebouncedAction()
     private let collapsedSize = CGSize(width: 200, height: 32)
-    private let expandedSize = CGSize(width: 320, height: 380)
+    private let expandedSize = CGSize(width: PanelMetrics.width, height: PanelMetrics.notchExpandedHeight)
 
     init(store: StashStore) {
         panel = NSPanel(
@@ -39,19 +39,16 @@ final class NotchController: ObservableObject {
     func hide() { panel.orderOut(nil) }
 
     func requestExpand() {
-        collapseWorkItem?.cancel()
+        collapseAction.cancel()
         isExpanded = true
         reposition()
     }
 
     func requestCollapse(afterDelay: Bool) {
-        collapseWorkItem?.cancel()
-        let work = DispatchWorkItem { [weak self] in
+        collapseAction.fire(after: afterDelay ? 0.4 : 0) { [weak self] in
             self?.isExpanded = false
             self?.reposition()
         }
-        collapseWorkItem = work
-        DispatchQueue.main.asyncAfter(deadline: .now() + (afterDelay ? 0.4 : 0), execute: work)
     }
 
     private func reposition() {
@@ -79,7 +76,7 @@ private struct NotchRootView: View {
         Group {
             if controller.isExpanded {
                 StashPanelView(store: store)
-                    .frame(width: 320, height: 380)
+                    .frame(width: PanelMetrics.width, height: PanelMetrics.notchExpandedHeight)
                     .background(.black)
                     .clipShape(UnevenRoundedRectangle(bottomLeadingRadius: 16, bottomTrailingRadius: 16))
             } else {
