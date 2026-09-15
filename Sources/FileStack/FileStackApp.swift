@@ -87,9 +87,10 @@ struct PopoverContent: View {
             .buttonStyle(.plain)
             .font(.callout)
             .foregroundStyle(.secondary)
-            .padding(12)
+            .padding(.horizontal, 12)
+            .frame(height: 40) // fixed: keeps the total panel height budget exact
         }
-        .frame(width: 320, height: 400)
+        .frame(width: 320, height: 420)
         .onHover { onHover($0) }
     }
 }

@@ -61,9 +61,12 @@ final class DragSourceView: NSView, NSDraggingSource {
         nameLabel.font = .systemFont(ofSize: 12.5)
         nameLabel.lineBreakMode = .byTruncatingTail
         nameLabel.usesSingleLineMode = true
+        nameLabel.cell?.truncatesLastVisibleLine = true
 
         sizeLabel.font = .systemFont(ofSize: 10)
         sizeLabel.textColor = .secondaryLabelColor
+        sizeLabel.lineBreakMode = .byTruncatingTail
+        sizeLabel.usesSingleLineMode = true
 
         deleteButton.isBordered = false
         deleteButton.imageScaling = .scaleProportionallyUpOrDown
@@ -73,27 +76,8 @@ final class DragSourceView: NSView, NSDraggingSource {
         deleteButton.isHidden = true
 
         for v in [imageView, nameLabel, sizeLabel, deleteButton] {
-            v.translatesAutoresizingMaskIntoConstraints = false
             addSubview(v)
         }
-        NSLayoutConstraint.activate([
-            imageView.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 8),
-            imageView.centerYAnchor.constraint(equalTo: centerYAnchor),
-            imageView.widthAnchor.constraint(equalToConstant: 24),
-            imageView.heightAnchor.constraint(equalToConstant: 24),
-
-            nameLabel.leadingAnchor.constraint(equalTo: imageView.trailingAnchor, constant: 10),
-            nameLabel.trailingAnchor.constraint(lessThanOrEqualTo: deleteButton.leadingAnchor, constant: -6),
-            nameLabel.centerYAnchor.constraint(equalTo: centerYAnchor, constant: -7),
-
-            sizeLabel.leadingAnchor.constraint(equalTo: nameLabel.leadingAnchor),
-            sizeLabel.centerYAnchor.constraint(equalTo: centerYAnchor, constant: 7),
-
-            deleteButton.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -8),
-            deleteButton.centerYAnchor.constraint(equalTo: centerYAnchor),
-            deleteButton.widthAnchor.constraint(equalToConstant: 16),
-            deleteButton.heightAnchor.constraint(equalToConstant: 16),
-        ])
     }
 
     required init?(coder: NSCoder) { fatalError() }
@@ -102,6 +86,32 @@ final class DragSourceView: NSView, NSDraggingSource {
         imageView.image = item?.icon
         nameLabel.stringValue = item?.name ?? ""
         sizeLabel.stringValue = item?.sizeString ?? ""
+    }
+
+    // Manual frame layout instead of Auto Layout constraints: deterministic and
+    // immune to content-hugging/compression-resistance fights that previously left
+    // long filenames rendered oddly instead of cleanly truncated.
+    override func layout() {
+        super.layout()
+        let iconSize: CGFloat = 24
+        imageView.frame = NSRect(x: 8, y: (bounds.height - iconSize) / 2, width: iconSize, height: iconSize)
+
+        let deleteSize: CGFloat = 16
+        deleteButton.frame = NSRect(
+            x: bounds.width - 8 - deleteSize, y: (bounds.height - deleteSize) / 2,
+            width: deleteSize, height: deleteSize
+        )
+
+        let textX = imageView.frame.maxX + 10
+        let textWidth = max(0, deleteButton.frame.minX - 6 - textX)
+        let nameHeight: CGFloat = 15
+        let sizeHeight: CGFloat = 12
+        let gap: CGFloat = 2
+        let blockHeight = nameHeight + gap + sizeHeight
+        let startY = (bounds.height - blockHeight) / 2
+
+        sizeLabel.frame = NSRect(x: textX, y: startY, width: textWidth, height: sizeHeight)
+        nameLabel.frame = NSRect(x: textX, y: startY + sizeHeight + gap, width: textWidth, height: nameHeight)
     }
 
     override func updateTrackingAreas() {

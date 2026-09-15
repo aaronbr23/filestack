@@ -69,7 +69,7 @@ final class StatusBarController {
     private var closeWorkItem: DispatchWorkItem?
     private var pinnedOpen = false
 
-    private let panelSize = NSSize(width: 320, height: 400)
+    private let panelSize = NSSize(width: 320, height: 420)
     private let gapBelowMenuBar: CGFloat = 8
 
     init(store: StashStore, settings: AppSettings) {

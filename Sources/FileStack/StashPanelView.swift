@@ -25,5 +25,6 @@ struct StashPanelView: View {
                 .padding(.vertical, 2)
                 .background(Capsule().fill(.quaternary))
         }
+        .frame(height: 22) // fixed: keeps the total panel height budget exact
     }
 }
