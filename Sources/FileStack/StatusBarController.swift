@@ -1,0 +1,144 @@
+import AppKit
+import SwiftUI
+import Combine
+import UniformTypeIdentifiers
+
+/// The menu bar icon itself, drawn and hit-tested by hand: a stock NSStatusItem
+/// button doesn't report file-drag hover, and SwiftUI's MenuBarExtra only opens on
+/// click — neither lets "hover to open" (with or without dragging a file) work,
+/// which is the whole point of this mode.
+final class StatusIconView: NSView {
+    var onActivate: (() -> Void)?
+    var onHoverChange: ((Bool) -> Void)?
+    var isFull = false { didSet { needsDisplay = true } }
+
+    private var trackingArea: NSTrackingArea?
+
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        registerForDraggedTypes([.fileURL])
+    }
+
+    required init?(coder: NSCoder) { fatalError() }
+
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        if let trackingArea { removeTrackingArea(trackingArea) }
+        let area = NSTrackingArea(rect: bounds, options: [.mouseEnteredAndExited, .activeAlways], owner: self)
+        addTrackingArea(area)
+        trackingArea = area
+    }
+
+    override func mouseEntered(with event: NSEvent) { onHoverChange?(true) }
+    override func mouseExited(with event: NSEvent) { onHoverChange?(false) }
+
+    override func draw(_ dirtyRect: NSRect) {
+        let name = isFull ? "tray.full.fill" : "tray"
+        guard let base = NSImage(systemSymbolName: name, accessibilityDescription: nil),
+              let symbol = base.withSymbolConfiguration(.init(pointSize: 15, weight: .medium)) else { return }
+        symbol.isTemplate = true
+        let rect = NSRect(
+            x: (bounds.width - symbol.size.width) / 2,
+            y: (bounds.height - symbol.size.height) / 2,
+            width: symbol.size.width, height: symbol.size.height
+        )
+        symbol.draw(in: rect)
+    }
+
+    override func mouseDown(with event: NSEvent) { onActivate?() }
+
+    // Fires only during an actual external file drag (Finder → icon); plain mouse
+    // hover is covered by mouseEntered/mouseExited above.
+    override func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation {
+        onHoverChange?(true)
+        return []  // the real drop targets live inside the popover, not the icon
+    }
+
+    override func draggingExited(_ sender: NSDraggingInfo?) {
+        onHoverChange?(false)
+    }
+}
+
+@MainActor
+final class StatusBarController {
+    private let statusItem = NSStatusBar.system.statusItem(withLength: 26)
+    private let popover = NSPopover()
+    private let iconView = StatusIconView(frame: NSRect(x: 0, y: 0, width: 26, height: 22))
+    private var itemsCancellable: AnyCancellable?
+    private var outsideClickMonitor: Any?
+    private var closeWorkItem: DispatchWorkItem?
+    private var pinnedOpen = false
+
+    init(store: StashStore, settings: AppSettings) {
+        if let button = statusItem.button {
+            iconView.frame = button.bounds
+            iconView.autoresizingMask = [.width, .height]
+            button.addSubview(iconView)
+        }
+
+        popover.contentSize = NSSize(width: 320, height: 400)
+        // .transient closes the popover the instant a drag session starts (AppKit
+        // treats it as "outside interaction"), which kills drag-out before the file
+        // ever reaches its destination. We own opening/closing ourselves instead.
+        popover.behavior = .applicationDefined
+        popover.contentViewController = NSHostingController(
+            rootView: PopoverContent(store: store, settings: settings, onHover: { [weak self] in self?.noteHover($0) })
+        )
+
+        iconView.onActivate = { [weak self] in self?.toggleClick() }
+        iconView.onHoverChange = { [weak self] in self?.noteHover($0) }
+
+        itemsCancellable = store.$items
+            .sink { [weak self] items in self?.iconView.isFull = !items.isEmpty }
+    }
+
+    func show() { statusItem.isVisible = true }
+    func hide() { statusItem.isVisible = false }
+
+    private func toggleClick() {
+        if popover.isShown {
+            pinnedOpen = false
+            closePopover()
+        } else {
+            pinnedOpen = true
+            openPopover()
+        }
+    }
+
+    /// Hovering the icon (with or without a dragged file) or the popover content
+    /// itself opens/keeps it open; leaving both schedules a collapse, unless the
+    /// user explicitly clicked it open.
+    private func noteHover(_ hovering: Bool) {
+        if hovering {
+            closeWorkItem?.cancel()
+            openPopover()
+        } else if !pinnedOpen {
+            scheduleClose()
+        }
+    }
+
+    private func openPopover() {
+        closeWorkItem?.cancel()
+        guard !popover.isShown, let button = statusItem.button else { return }
+        popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
+        // A drag started inside our own popover never fires this (global monitors
+        // only see events in *other* apps' windows), so it can't self-close mid-drag.
+        outsideClickMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] _ in
+            self?.pinnedOpen = false
+            self?.closePopover()
+        }
+    }
+
+    private func scheduleClose() {
+        closeWorkItem?.cancel()
+        let work = DispatchWorkItem { [weak self] in self?.closePopover() }
+        closeWorkItem = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35, execute: work)
+    }
+
+    private func closePopover() {
+        popover.performClose(nil)
+        if let outsideClickMonitor { NSEvent.removeMonitor(outsideClickMonitor) }
+        outsideClickMonitor = nil
+    }
+}

@@ -1,0 +1,4 @@
+.build/
+FileStack.app/
+.swiftpm/
+*.xcodeproj
