@@ -1,131 +1,145 @@
-# FileStack — Lokale Datei-Zwischenablage für macOS
+# FileStack — Local File Shelf for macOS
+
+> Original design plan from before implementation started. Kept as historical
+> record — a few details changed along the way (see note at the bottom).
 
 ## Context
 
-Das Repo `filestack` ist leer. Ziel: eine eigene, vollständig lokale Mac-App als Ersatz für das
-Datei-Ablage-Feature von BoringNotch. Begründung des Nutzers: kein Vertrauen in Drittanbieter mit
-Dateizugriff — die App darf daher **keinerlei Netzwerkcode** enthalten, alle Daten bleiben unter
-`~/Library/Application Support/FileStack/`.
+The `filestack` repo started empty. Goal: a fully local Mac app that replaces
+BoringNotch's file-shelf feature. Motivation: no trust in a third-party tool
+having file access — so the app must contain **no network code at all**, all
+data stays under `~/Library/Application Support/FileStack/`.
 
-Funktionsumfang:
-- Dateien per Drag & Drop in eine temporäre Ablage legen, später wieder herausziehen.
-- Zwei Anzeige-Modi: Menüleisten-Icon (wie WireGuard) **oder** Notch-Panel mit Ausklapp-Animation.
-- Beim Hineinziehen zwei Zonen: **Verschieben** (Original am Ursprungsort wird entfernt) und
-  **Kopieren** (Original bleibt liegen).
-- Beim Herausziehen verschwindet der Eintrag immer aus der Ablage.
+Scope:
+- Drag files into a temporary shelf, drag them back out later.
+- Two display modes: a menu bar icon (like WireGuard) **or** a notch panel
+  with an expand animation.
+- Two drop-in zones: **Move** (removes the original at its source) and
+  **Copy** (leaves the original in place).
+- Dragging an item back out always removes it from the shelf.
 
-Entscheidungen (vom Nutzer bestätigt):
-| Thema | Entscheidung |
+Decisions (confirmed by the user):
+| Topic | Decision |
 |---|---|
-| Ablage-Speicher | Echte Kopie unter Application Support, nicht nur Referenz |
-| Drop-In | Zwei Zonen: Verschieben (Original weg) / Kopieren (Original bleibt) |
-| Drag-Out | Eintrag verlässt die Ablage, sobald der Empfänger die Datei angenommen hat |
-| Toolchain | Swift Package Manager, kein Xcode (nur Command Line Tools vorhanden) |
-| Notch-Fallback | Ohne Hardware-Notch automatisch Menüleisten-Modus |
+| Storage | Real copy under Application Support, not just a reference |
+| Drop-in | Two zones: Move (original gone) / Copy (original stays) |
+| Drag-out | Entry leaves the shelf as soon as the receiver has accepted the file |
+| Toolchain | Swift Package Manager, no Xcode (Command Line Tools only) |
+| Notch fallback | Falls back to menu bar mode automatically without a hardware notch |
 
-## Technischer Rahmen
+## Technical Framework
 
-- macOS 26.6, Swift 6.4, SwiftUI + AppKit. Kein Xcode → SPM-Executable + Shell-Skript, das das
-  `.app`-Bundle zusammensetzt.
-- Keine Sandbox (ohne Xcode kein bequemes Entitlement-Handling) → „Verschieben“ des Originals
-  funktioniert mit normalem `FileManager`. Dafür einmalig „Festplattenvollzugriff“ bzw. die
-  TCC-Abfragen für Schreibtisch/Dokumente/Downloads beim ersten Zugriff.
-- Keine externen Dependencies.
+- macOS 26.6, Swift 6.4, SwiftUI + AppKit. No Xcode → SPM executable + shell
+  script that assembles the `.app` bundle.
+- No sandbox (no convenient entitlement handling without Xcode) → "moving"
+  the original works with plain `FileManager`. In exchange, the OS asks for
+  Full Disk Access / per-folder TCC permission (Desktop/Documents/Downloads)
+  on first access.
+- No external dependencies.
 
-## Dateistruktur
+## File Structure
 
 ```
 Package.swift
-build.sh                       # swift build -c release + .app-Bundle bauen
-Resources/Info.plist           # LSUIElement=1 (kein Dock-Icon), Bundle-ID, Version
-PLAN.md                        # Kopie dieses Plans ins Projektroot (Schritt 0)
+build.sh                       # swift build -c release + assemble the .app bundle
+Resources/Info.plist           # LSUIElement=1 (no Dock icon), bundle ID, version
+PLAN.md                        # copy of this plan into the project root (step 0)
 Sources/FileStack/
-  FileStackApp.swift           # @main, AppDelegate, Modus-Umschaltung
-  StashStore.swift             # Modell + Plattenoperationen
-  StashItem.swift              # Struct: id, url, name, size, addedAt, NSImage-Icon (lazy)
-  DropZonesView.swift          # Zwei Drop-Targets: Verschieben / Kopieren
-  StashListView.swift          # Liste, Drag-out, Löschen, Quick Look
-  FilePromise.swift            # NSFilePromiseProvider + Delegate (Drag-out)
-  NotchPanel.swift             # NSPanel, Notch-Geometrie, Expand/Collapse
-  SettingsView.swift           # Modus-Picker, Autostart, Ablage leeren
+  FileStackApp.swift           # @main, AppDelegate, mode switching
+  StashStore.swift             # model + disk operations
+  StashItem.swift              # struct: id, url, name, size, addedAt, lazy NSImage icon
+  DropZonesView.swift          # two drop targets: move / copy
+  StashListView.swift          # list, drag-out, delete, Quick Look
+  FilePromise.swift            # NSFilePromiseProvider + delegate (drag-out)
+  NotchPanel.swift             # NSPanel, notch geometry, expand/collapse
+  SettingsView.swift           # mode picker, autostart, clear shelf
 ```
 
-## Kernbausteine
+## Core Building Blocks
 
-### 1. Speicher (`StashStore.swift`)
+### 1. Storage (`StashStore.swift`)
 
-Layout auf Platte — das Verzeichnis **ist** die Datenbank, keine separate Index-Datei:
+On-disk layout — the directory itself **is** the database, no separate index
+file:
 
 ```
-~/Library/Application Support/FileStack/Stash/<uuid>/<Originaldateiname>
+~/Library/Application Support/FileStack/Stash/<uuid>/<original filename>
 ```
 
-Ein UUID-Unterordner pro Eintrag löst Namenskollisionen und bewahrt den Originalnamen.
-Beim Start wird der Ordner einmal enumeriert (`FileManager.contentsOfDirectory`), sortiert nach
-`creationDate` → daraus die `[StashItem]`-Liste. Persistenz und Wiederherstellung damit gratis.
+One UUID subfolder per entry avoids name collisions and preserves the
+original filename. On launch the folder is enumerated once
+(`FileManager.contentsOfDirectory`), sorted by `creationDate`, into the
+`[StashItem]` list — persistence and restoring state come for free.
 
 API:
-- `add(url: URL, mode: .move | .copy)` — Zielordner anlegen, `copyItem`, bei `.move` anschließend
-  `removeItem(at: url)` am Ursprungsort. Reihenfolge ist bewusst kopieren-dann-löschen, damit ein
-  Fehler nie zu Datenverlust führt. `moveItem` wird nicht benutzt, weil es über Volume-Grenzen
-  hinweg und bei Downloads-TCC unzuverlässig ist.
-- `remove(_ item:)` — Unterordner löschen.
+- `add(url: URL, mode: .move | .copy)` — create the destination folder,
+  `copyItem`, then for `.move` follow up with `removeItem(at: url)` at the
+  source. Copy-then-delete is deliberate so a failure never loses the file.
+  `moveItem` isn't used because it's unreliable across volume boundaries and
+  with Downloads-folder TCC prompts.
+- `remove(_ item:)` — delete the subfolder.
 - `removeAll()`.
-- Ordner überwachen mit `DispatchSource.makeFileSystemObjectSource` (Stdlib) ist optional; bei nur
-  einem Schreiber (der App selbst) reicht direktes Aktualisieren der `@Published`-Liste.
+- Watching the folder with `DispatchSource.makeFileSystemObjectSource`
+  (stdlib) is optional; with only one writer (the app itself), directly
+  updating the published list is enough.
 
-### 2. Drop-In: zwei Zonen (`DropZonesView.swift`)
+### 2. Drop-in: Two Zones (`DropZonesView.swift`)
 
-Zwei nebeneinanderliegende `.onDrop(of: [.fileURL], isTargeted:)`-Bereiche, klar beschriftet
-(„Verschieben — Original wird entfernt“ / „Kopieren — Original bleibt“), mit Hover-Highlight und
-unterschiedlichen Symbolen (`arrow.right.doc.on.clipboard` / `doc.on.doc`).
-Beide rufen dasselbe `store.add(url:mode:)` mit unterschiedlichem `mode`. Mehrfachauswahl wird
-unterstützt (mehrere Provider pro Drop).
+Two side-by-side `.onDrop(of: [.fileURL], isTargeted:)` regions, clearly
+labeled ("Move — removes the original" / "Copy — original stays"), with a
+hover highlight and distinct icons (`arrow.right.doc.on.clipboard` /
+`doc.on.doc`). Both call the same `store.add(url:mode:)` with a different
+mode. Multi-selection is supported (multiple providers per drop).
 
-Ordner werden wie Dateien behandelt (`copyItem` kopiert rekursiv).
+Folders are treated like files (`copyItem` copies recursively).
 
-### 3. Drag-Out mit garantiertem Entfernen (`FilePromise.swift`)
+### 3. Drag-out with Guaranteed Removal (`FilePromise.swift`)
 
-Ein einfaches `.onDrag { NSItemProvider(contentsOf: url) }` meldet nicht zuverlässig, ob der Drop
-angenommen wurde. Stattdessen `NSFilePromiseProvider`:
+A plain `.onDrag { NSItemProvider(contentsOf: url) }` doesn't reliably report
+whether the drop was accepted. Using `NSFilePromiseProvider` instead:
 
-- `NSViewRepresentable`-Wrapper um eine kleine `NSView`, die den Drag startet.
-- `NSFilePromiseProviderDelegate.filePromiseProvider(_:writePromiseTo:completionHandler:)` kopiert
-  die Datei an das Ziel; **erst im Completion-Handler** wird `store.remove(item)` aufgerufen.
-- Bricht der Nutzer ab oder lehnt das Ziel ab, bleibt der Eintrag erhalten.
-- Zusätzlich `draggingSession(_:endedAt:operation:)` als Sicherheitsnetz für Ziele, die keine
-  Promises unterstützen (dort Fallback auf `operation != []`).
+- An `NSViewRepresentable` wrapper around a small `NSView` that starts the
+  drag.
+- `NSFilePromiseProviderDelegate.filePromiseProvider(_:writePromiseTo:completionHandler:)`
+  copies the file to the destination; **only inside the completion handler**
+  is `store.remove(item)` called.
+- If the user cancels or the target rejects it, the entry stays.
+- Additionally `draggingSession(_:endedAt:operation:)` as a safety net for
+  targets that don't support promises (falls back to `operation != []`).
 
-### 4. Menüleisten-Modus
+### 4. Menu Bar Mode
 
-SwiftUI `MenuBarExtra("FileStack", systemImage: …) { StashPanelView() }` mit `.menuBarExtraStyle(.window)`.
-Kein manuelles `NSStatusItem` nötig. Das Badge zeigt die Anzahl der Einträge.
-Wichtig: Drops auf das Menüleisten-Icon selbst funktionieren nicht — das Popover muss geöffnet sein.
-Deshalb zeigt das Icon-Symbol den Füllstand, und die Drop-Zonen liegen im Popover.
+SwiftUI `MenuBarExtra("FileStack", systemImage: …) { StashPanelView() }` with
+`.menuBarExtraStyle(.window)`. No manual `NSStatusItem` needed. The badge
+shows the item count. Important: drops directly onto the menu bar icon don't
+work — the popover has to be open first. So the icon symbol reflects the
+fill state, and the drop zones live inside the popover.
 
-### 5. Notch-Modus (`NotchPanel.swift`)
+### 5. Notch Mode (`NotchPanel.swift`)
 
-- Verfügbarkeitsprüfung: `NSScreen.main?.safeAreaInsets.top ?? 0 > 0` (bzw.
-  `auxiliaryTopLeftArea`). Ist der Wert 0 → Modus-Picker schaltet automatisch auf Menüleiste um und
-  zeigt einen erklärenden Hinweis.
-- Ein randloser `NSPanel` (`styleMask: [.borderless, .nonactivatingPanel]`,
-  `level: .statusBar + 1`, `collectionBehavior: [.canJoinAllSpaces, .fullScreenAuxiliary]`,
-  `isOpaque = false`), positioniert an der Oberkante mittig, Breite/Höhe der Notch im eingeklappten
-  Zustand.
-- Eingeklappt: unsichtbar, deckt exakt die Notch-Fläche ab und ist als Drag-Ziel registriert.
-- `draggingEntered` oder `onHover` → Panel wächst animiert (`NSAnimationContext`, Größe + SwiftUI
-  `.transition`) auf das volle Ablage-Panel mit abgerundeten unteren Ecken, das optisch aus der
-  Notch herauswächst. Verlassen → Einklappen nach kurzer Verzögerung (~0,4 s), damit der Weg zum
-  Panel nicht abreißt.
-- Displaywechsel/Auflösungsänderung: `NSApplication.didChangeScreenParametersNotification` →
-  neu positionieren.
+- Availability check: `NSScreen.main?.safeAreaInsets.top ?? 0 > 0` (or
+  `auxiliaryTopLeftArea`). If it's 0, the mode picker automatically switches
+  to menu bar mode and shows an explanatory note.
+- A borderless `NSPanel` (`styleMask: [.borderless, .nonactivatingPanel]`,
+  `level: .statusBar + 1`, `collectionBehavior: [.canJoinAllSpaces,
+  .fullScreenAuxiliary]`, `isOpaque = false`), positioned centered at the top
+  edge, sized to the notch while collapsed.
+- Collapsed: invisible, exactly covers the notch area, and is registered as a
+  drag destination.
+- `draggingEntered` or `onHover` → the panel grows animated
+  (`NSAnimationContext`, size + SwiftUI `.transition`) into the full shelf
+  panel with rounded bottom corners, visually growing out of the notch.
+  Leaving → collapses after a short delay (~0.4s) so the path to the panel
+  doesn't break.
+- Display/resolution change: `NSApplication.didChangeScreenParametersNotification`
+  → reposition.
 
-### 6. Einstellungen (`SettingsView.swift`)
+### 6. Settings (`SettingsView.swift`)
 
-- Modus: Menüleiste / Notch (Notch deaktiviert, wenn kein Notch vorhanden) — `@AppStorage`.
+- Mode: menu bar / notch (notch disabled when unavailable) — `@AppStorage`.
 - Autostart: `SMAppService.mainApp.register()` / `.unregister()`.
-- Belegter Speicher anzeigen + „Ablage leeren“.
-- Optional (später): automatisches Löschen von Einträgen älter als N Tage.
+- Show storage used + "Clear shelf".
+- Optional (later): auto-delete entries older than N days.
 
 ### 7. Build (`build.sh`)
 
@@ -134,44 +148,62 @@ swift build -c release
 mkdir -p FileStack.app/Contents/{MacOS,Resources}
 cp .build/release/FileStack FileStack.app/Contents/MacOS/
 cp Resources/Info.plist FileStack.app/Contents/
-codesign --force --deep --sign - FileStack.app     # Ad-hoc, damit TCC-Rechte stabil bleiben
+codesign --force --deep --sign - FileStack.app     # ad-hoc, keeps TCC grants stable
 ```
 
-Ad-hoc-Signatur ist wichtig: ohne stabile Signatur fragt macOS nach jedem Rebuild erneut nach
-Dateizugriffsrechten.
+Ad-hoc signing matters: without a stable signature, macOS re-asks for
+file-access permissions after every rebuild.
 
-## Umsetzungsreihenfolge
+## Implementation Order
 
-1. `PLAN.md` ins Projektroot schreiben (Kopie dieses Dokuments).
-2. `Package.swift`, `Info.plist`, `build.sh` → leere App startet als Menüleisten-Icon (Rung 1).
-3. `StashStore` + `StashItem` + Verzeichnis-Enumeration, mit Selbsttest.
-4. Menüleisten-Popover: Liste + zwei Drop-Zonen. Ab hier ist die App benutzbar.
-5. Drag-Out über `NSFilePromiseProvider`, inkl. Entfernen nach bestätigtem Drop.
-6. Einstellungen (Modus, Autostart, Leeren).
-7. Notch-Panel mit Animation + automatischer Fallback.
-8. Feinschliff: Icons per `NSWorkspace.shared.icon(forFile:)`, Quick Look via `QLPreviewPanel`,
-   Kontextmenü (Im Finder zeigen / Entfernen).
+1. Write `PLAN.md` into the project root (copy of this document).
+2. `Package.swift`, `Info.plist`, `build.sh` → an empty app that starts as a
+   menu bar icon (rung 1).
+3. `StashStore` + `StashItem` + directory enumeration, with a self-check.
+4. Menu bar popover: list + two drop zones. The app is usable from here on.
+5. Drag-out via `NSFilePromiseProvider`, including removal only after a
+   confirmed drop.
+6. Settings (mode, autostart, clear).
+7. Notch panel with animation + automatic fallback.
+8. Polish: icons via `NSWorkspace.shared.icon(forFile:)`, Quick Look via
+   `QLPreviewPanel`, context menu (reveal in Finder / remove).
 
-## Verifikation
+## Verification
 
-Selbsttest im Code: eine `demo()`-Funktion bzw. `Tests/StashStoreTests.swift` mit `assert`-Prüfungen
-für `add(.copy)` (Original existiert noch), `add(.move)` (Original weg, Kopie da), `remove`
-(Ordner weg) — auf einem temporären Verzeichnis, ohne UI.
+Built-in self-check: a `demo()` function or `Tests/StashStoreTests.swift`
+with assertion checks for `add(.copy)` (original still exists), `add(.move)`
+(original gone, copy present), `remove` (folder gone) — against a temporary
+directory, no UI involved.
 
-Manuell nach dem Build (`./build.sh && open FileStack.app`):
-1. Datei aus dem Finder auf die **Kopieren**-Zone → erscheint in der Liste, Original liegt noch da.
-2. Dieselbe Datei auf die **Verschieben**-Zone → erscheint in der Liste, Original ist weg.
-3. `ls ~/Library/Application\ Support/FileStack/Stash/` → ein UUID-Ordner pro Eintrag.
-4. Eintrag auf den Schreibtisch ziehen → Datei liegt dort, Eintrag ist aus der Liste verschwunden.
-5. Drag abbrechen (Escape / ins Leere) → Eintrag bleibt erhalten.
-6. App beenden und neu starten → Liste identisch.
-7. Modus auf Notch umstellen → Panel klappt bei Hover und bei Drag-Hover aus; auf externem Monitor
-   ohne Notch fällt die App auf den Menüleisten-Modus zurück.
-8. Ordner und Mehrfachauswahl droppen.
-9. `grep -rE "URLSession|Network|http" Sources/` → keine Treffer (Datenschutz-Zusage).
+Manual, after building (`./build.sh && open FileStack.app`):
+1. Drag a file from Finder onto the **Copy** zone → appears in the list,
+   original still there.
+2. Same file onto the **Move** zone → appears in the list, original is gone.
+3. `ls ~/Library/Application\ Support/FileStack/Stash/` → one UUID folder per
+   entry.
+4. Drag an entry onto the Desktop → the file lands there, the entry
+   disappears from the list.
+5. Cancel a drag (Escape / drop nowhere) → the entry stays.
+6. Quit and relaunch the app → list is identical.
+7. Switch mode to Notch → the panel expands on hover and on drag-hover; on an
+   external display without a notch the app falls back to menu bar mode.
+8. Drop a folder and a multi-selection.
+9. `grep -rE "URLSession|Network|http" Sources/` → no matches (privacy claim).
 
-## Bewusst weggelassen
+## Deliberately Left Out
 
-- iCloud/Sync, Verschlüsselung, Verlaufsdatenbank — lokal und flach reicht.
-- Eigenes Icon-Cache-Layer — `NSWorkspace` liefert die Icons.
-- Sandbox-Entitlements — würden das „Original verschieben“ ohne Xcode unnötig verkomplizieren.
+- iCloud sync, encryption, a history database — local and flat is enough.
+- A custom icon cache layer — `NSWorkspace` already provides icons.
+- Sandbox entitlements — would make "move the original" unnecessarily
+  complicated without Xcode.
+
+---
+
+**What changed during implementation:** the self-check ended up as a plain
+`SelfTest.swift` with `precondition()` (run via `--selftest`) instead of an
+XCTest target — Swift Testing's bundled framework didn't build against the
+pinned older SDK this toolchain needs (see `build.sh`'s comment). Autostart
+was skipped as YAGNI (nobody asked for it yet). The menu bar mode ended up as
+a custom `NSStatusItem` + borderless `NSPanel` (`StatusBarController.swift`)
+rather than `MenuBarExtra`, because dragging a file needs to open the panel
+on hover, which `MenuBarExtra` can't do.
