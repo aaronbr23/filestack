@@ -10,7 +10,7 @@ struct StashPanelView: View {
             StashListView(store: store)
         }
         .padding(14)
-        .frame(width: 320, height: 400)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     private var header: some View {

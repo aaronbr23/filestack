@@ -89,6 +89,7 @@ struct PopoverContent: View {
             .foregroundStyle(.secondary)
             .padding(12)
         }
+        .frame(width: 320, height: 400)
         .onHover { onHover($0) }
     }
 }
