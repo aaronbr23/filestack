@@ -17,7 +17,7 @@ struct StashListView: View {
                 VStack(spacing: 2) {
                     ForEach(store.items) { item in
                         StashRow(item: item, store: store)
-                            .frame(height: 40)
+                            .frame(maxWidth: .infinity, minHeight: 40, maxHeight: 40)
                     }
                 }
             }
