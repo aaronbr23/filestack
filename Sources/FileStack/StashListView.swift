@@ -2,13 +2,14 @@ import SwiftUI
 
 struct StashListView: View {
     @ObservedObject var store: StashStore
+    @AppStorage("language") private var language: AppLanguage = .english
 
     var body: some View {
         if store.items.isEmpty {
             VStack(spacing: 6) {
                 Spacer()
                 Image(systemName: "tray").font(.system(size: 26)).foregroundStyle(.tertiary)
-                Text("Ablage leer").font(.callout).foregroundStyle(.secondary)
+                Text(t("Shelf empty", "Ablage leer", language)).font(.callout).foregroundStyle(.secondary)
                 Spacer()
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)

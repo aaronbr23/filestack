@@ -22,6 +22,8 @@ anyone who doesn't want a third-party menu bar tool touching their files.
   a file over it, not just on click.
 - **100% local** — no network code anywhere in the source. Verify yourself:
   `grep -rE "URLSession|Network|http" Sources/`
+- **English by default, German in Settings** — the UI language is a toggle in
+  Settings, independent of your system locale.
 
 ## Requirements
 
@@ -56,7 +58,8 @@ and add it in **System Settings → General → Login Items**.
    disappears from the shelf once the drop lands.
 4. Right-click an item to reveal it in Finder or remove it directly.
 5. Open **Settings** from the shelf's footer to switch between menu bar and
-   notch mode, or clear the shelf entirely.
+   notch mode, switch the UI language (English/German), or clear the shelf
+   entirely.
 
 ## Development
 

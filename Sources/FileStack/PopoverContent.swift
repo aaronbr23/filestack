@@ -7,6 +7,7 @@ struct PopoverContent: View {
     @ObservedObject var store: StashStore
     @ObservedObject var settings: AppSettings
     let onHover: (Bool) -> Void
+    @AppStorage("language") private var language: AppLanguage = .english
 
     var body: some View {
         VStack(spacing: 0) {
@@ -15,7 +16,8 @@ struct PopoverContent: View {
             } else {
                 VStack(spacing: 8) {
                     Image(systemName: "menubar.dock.rectangle").font(.system(size: 28)).foregroundStyle(.secondary)
-                    Text("Ablage läuft in der Notch").font(.callout).foregroundStyle(.secondary)
+                    Text(t("Shelf is running in the Notch", "Ablage läuft in der Notch", language))
+                        .font(.callout).foregroundStyle(.secondary)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
@@ -32,13 +34,13 @@ struct PopoverContent: View {
             Button {
                 openSettingsWindow()
             } label: {
-                Label("Einstellungen", systemImage: "gearshape")
+                Label(t("Settings", "Einstellungen", language), systemImage: "gearshape")
             }
             Spacer()
             Button {
                 NSApplication.shared.terminate(nil)
             } label: {
-                Label("Beenden", systemImage: "power")
+                Label(t("Quit", "Beenden", language), systemImage: "power")
             }
         }
         .buttonStyle(.plain)

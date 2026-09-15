@@ -153,11 +153,16 @@ final class DragSourceView: NSView, NSDraggingSource {
 
     override func menu(for event: NSEvent) -> NSMenu? {
         guard item != nil else { return nil }
+        let language = AppLanguage.current
         let menu = NSMenu()
-        let reveal = NSMenuItem(title: "Im Finder zeigen", action: #selector(revealInFinder), keyEquivalent: "")
+        let reveal = NSMenuItem(
+            title: t("Show in Finder", "Im Finder zeigen", language), action: #selector(revealInFinder), keyEquivalent: ""
+        )
         reveal.target = self
         menu.addItem(reveal)
-        let remove = NSMenuItem(title: "Entfernen", action: #selector(deleteTapped), keyEquivalent: "")
+        let remove = NSMenuItem(
+            title: t("Remove", "Entfernen", language), action: #selector(deleteTapped), keyEquivalent: ""
+        )
         remove.target = self
         menu.addItem(remove)
         return menu

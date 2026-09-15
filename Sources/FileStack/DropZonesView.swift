@@ -3,11 +3,20 @@ import UniformTypeIdentifiers
 
 struct DropZonesView: View {
     @ObservedObject var store: StashStore
+    @AppStorage("language") private var language: AppLanguage = .english
 
     var body: some View {
         HStack(spacing: 10) {
-            DropZone(mode: .move, label: "Verschieben", hint: "Original wird entfernt", systemImage: "arrow.right.doc.on.clipboard", tint: .orange, store: store)
-            DropZone(mode: .copy, label: "Kopieren", hint: "Original bleibt", systemImage: "doc.on.doc", tint: .accentColor, store: store)
+            DropZone(
+                mode: .move, label: t("Move", "Verschieben", language),
+                hint: t("Original is removed", "Original wird entfernt", language),
+                systemImage: "arrow.right.doc.on.clipboard", tint: .orange, store: store
+            )
+            DropZone(
+                mode: .copy, label: t("Copy", "Kopieren", language),
+                hint: t("Original stays", "Original bleibt", language),
+                systemImage: "doc.on.doc", tint: .accentColor, store: store
+            )
         }
         .frame(height: 82)
     }
