@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import UniformTypeIdentifiers
 
 /// The content hosted inside both the menu-bar floating panel (StatusBarController)
 /// and the notch panel (NotchController) — same view, two different windows.
@@ -27,6 +28,14 @@ struct PopoverContent: View {
         }
         .frame(width: PanelMetrics.width, height: PanelMetrics.menuBarHeight)
         .onHover { onHover($0) }
+        // .onHover alone never fires during a live external file drag (only for
+        // plain mouse movement), so without this the panel's auto-close timer kept
+        // running while the user was still dragging toward a drop zone, closing the
+        // panel out from under them mid-drag.
+        .onDrop(of: [.fileURL], isTargeted: Binding(
+            get: { false },
+            set: { targeted in if targeted { onHover(true) } }
+        )) { _ in false }
     }
 
     private var footer: some View {
