@@ -69,10 +69,10 @@ final class StatusBarController {
     private let closeAction = DebouncedAction()
     private var pinnedOpen = false
 
-    private let panelSize = NSSize(width: PanelMetrics.width, height: PanelMetrics.menuBarHeight)
+    private let panelSize = NSSize(width: PanelMetrics.width, height: PanelMetrics.height)
     private let gapBelowMenuBar: CGFloat = 8
 
-    init(store: StashStore, settings: AppSettings) {
+    init(store: StashStore) {
         if let button = statusItem.button {
             iconView.frame = button.bounds
             iconView.autoresizingMask = [.width, .height]
@@ -89,7 +89,7 @@ final class StatusBarController {
         panel.backgroundColor = .clear
         panel.hasShadow = true // gives the floating-card look instead of a popover glued to the icon
 
-        let content = PopoverContent(store: store, settings: settings, onHover: { [weak self] in self?.noteHover($0) })
+        let content = PopoverContent(store: store, onHover: { [weak self] in self?.noteHover($0) })
             .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
         panel.contentView = NSHostingView(rootView: content)
 

@@ -11,15 +11,14 @@ anyone who doesn't want a third-party menu bar tool touching their files.
 
 ## Features
 
-- **Two display modes** — a plain menu bar icon (à la WireGuard), or a
-  BoringNotch-style panel that expands out of the notch. Falls back to the
-  menu bar automatically on displays without a notch.
+- **A plain menu bar icon** (à la WireGuard) — click or hover to open the
+  shelf panel.
 - **Drag in, two ways** — a "Move" zone (removes the original) and a "Copy"
   zone (keeps it) side by side.
 - **Drag out** — drop a stashed file anywhere (Finder, another app); it's
   removed from the shelf only once the drop actually succeeds.
-- **Open on hover** — the icon/panel expands on mouse hover or while dragging
-  a file over it, not just on click.
+- **Open on hover** — the panel opens on mouse hover or while dragging a file
+  over the icon, not just on click.
 - **100% local** — no network code anywhere in the source. Verify yourself:
   `grep -rE "URLSession|Network|http" Sources/`
 - **English by default, German in Settings** — the UI language is a toggle in
@@ -57,9 +56,8 @@ and add it in **System Settings → General → Login Items**.
 3. Drag a stashed file out to Finder, another app, or the Desktop — it
    disappears from the shelf once the drop lands.
 4. Right-click an item to reveal it in Finder or remove it directly.
-5. Open **Settings** from the shelf's footer to switch between menu bar and
-   notch mode, switch the UI language (English/German), or clear the shelf
-   entirely.
+5. Open **Settings** from the shelf's footer to switch the UI language
+   (English/German) or clear the shelf entirely.
 
 ## Development
 

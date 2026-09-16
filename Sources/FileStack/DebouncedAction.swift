@@ -1,8 +1,7 @@
 import Foundation
 
 /// "Run this, but if asked again before it fires, cancel and reschedule" — the
-/// collapse-after-hover-exit behavior both NotchController and StatusBarController
-/// need, factored out instead of duplicated.
+/// collapse-after-hover-exit behavior StatusBarController needs.
 @MainActor
 final class DebouncedAction {
     private var pending: DispatchWorkItem?

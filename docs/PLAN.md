@@ -206,4 +206,16 @@ pinned older SDK this toolchain needs (see `build.sh`'s comment). Autostart
 was skipped as YAGNI (nobody asked for it yet). The menu bar mode ended up as
 a custom `NSStatusItem` + borderless `NSPanel` (`StatusBarController.swift`)
 rather than `MenuBarExtra`, because dragging a file needs to open the panel
-on hover, which `MenuBarExtra` can't do.
+on hover, which `MenuBarExtra` can't do. An English/German UI language
+toggle was added later (`Localization.swift`), not part of the original
+plan.
+
+**Notch mode was removed.** Section 5 above and the "two display modes"
+framing throughout this document describe the original design, including a
+`NotchPanel.swift` that expanded a panel out of the hardware notch. It shipped
+and worked, but the user later decided to drop it and keep only the menu bar
+icon — simpler surface, one thing to maintain. `NotchPanel.swift` and the
+`AppSettings`/`DisplayMode` mode-switching it needed are gone from the
+codebase; this document is left as-is otherwise since it's a historical
+record of the original design, not current documentation (see `README.md`
+for that).

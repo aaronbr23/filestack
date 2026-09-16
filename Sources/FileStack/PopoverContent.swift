@@ -2,31 +2,19 @@ import SwiftUI
 import AppKit
 import UniformTypeIdentifiers
 
-/// The content hosted inside both the menu-bar floating panel (StatusBarController)
-/// and the notch panel (NotchController) — same view, two different windows.
+/// The content hosted inside the menu-bar floating panel (StatusBarController).
 struct PopoverContent: View {
     @ObservedObject var store: StashStore
-    @ObservedObject var settings: AppSettings
     let onHover: (Bool) -> Void
     @AppStorage("language") private var language: AppLanguage = .english
 
     var body: some View {
         VStack(spacing: 0) {
-            if settings.mode == .menuBar {
-                StashPanelView(store: store)
-            } else {
-                VStack(spacing: 8) {
-                    Image(systemName: "menubar.dock.rectangle").font(.system(size: 28)).foregroundStyle(.secondary)
-                    Text(t("Shelf is running in the Notch", "Ablage läuft in der Notch", language))
-                        .font(.callout).foregroundStyle(.secondary)
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-            }
-
+            StashPanelView(store: store)
             Divider()
             footer
         }
-        .frame(width: PanelMetrics.width, height: PanelMetrics.menuBarHeight)
+        .frame(width: PanelMetrics.width, height: PanelMetrics.height)
         .onHover { onHover($0) }
         // .onHover alone never fires during a live external file drag (only for
         // plain mouse movement), so without this the panel's auto-close timer kept
