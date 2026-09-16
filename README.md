@@ -2,51 +2,82 @@
 
 ![FileStack](docs/assets/banner.png)
 
-A local-only macOS shelf for files: drag files in, drag them back out later.
-No cloud, no sync, no network access at all — everything lives in
+A local-only macOS menu bar shelf for files: drag files in, drag them back
+out later. No cloud, no sync, no network access at all — everything lives in
 `~/Library/Application Support/FileStack`.
-
-Inspired by BoringNotch's file-shelf feature, built as a standalone app for
-anyone who doesn't want a third-party menu bar tool touching their files.
 
 ## Features
 
-- **A plain menu bar icon** (à la WireGuard) — click or hover to open the
-  shelf panel.
+- **Menu bar icon** — click or hover to open the shelf, even while dragging a
+  file over it.
 - **Drag in, two ways** — a "Move" zone (removes the original) and a "Copy"
   zone (keeps it) side by side.
 - **Drag out** — drop a stashed file anywhere (Finder, another app); it's
   removed from the shelf only once the drop actually succeeds.
-- **Open on hover** — the panel opens on mouse hover or while dragging a file
-  over the icon, not just on click.
-- **100% local** — no network code anywhere in the source. Verify yourself:
-  `grep -rE "URLSession|Network|http" Sources/`
-- **English by default, German in Settings** — the UI language is a toggle in
-  Settings, independent of your system locale.
-
-## Requirements
-
-- macOS 14 (Sonoma) or later
-- Xcode Command Line Tools (full Xcode is **not** required)
+- **100% local, no network code** — `grep -rE "URLSession|Network|http" Sources/`
+- **English by default, German in Settings.**
 
 ## Installation
 
-FileStack isn't notarized or distributed as a signed release yet, so it's
-build-from-source for now:
+FileStack isn't notarized or distributed as a signed release, so you build it
+from source. This takes a few minutes and doesn't require Xcode.
+
+### 1. Prerequisites
+
+- macOS 14 (Sonoma) or later.
+- Xcode Command Line Tools. Check whether you already have them:
+
+  ```bash
+  xcode-select -p
+  ```
+
+  If that prints a path, you're set. If it errors, install them with:
+
+  ```bash
+  xcode-select --install
+  ```
+
+  A dialog opens — click **Install** and wait for it to finish (a few
+  minutes), then re-run `xcode-select -p` to confirm.
+
+### 2. Clone and build
 
 ```bash
-git clone https://github.com/<your-username>/filestack.git
+git clone https://github.com/aaronbr23/filestack.git
 cd filestack
 ./build.sh
+```
+
+`build.sh` compiles a release build with Swift Package Manager, assembles
+`FileStack.app` in the project folder, and ad-hoc signs it (so macOS doesn't
+re-ask for file-access permissions on every rebuild). It takes under a
+minute. If it fails, run it again and read the last few lines of output —
+`set -e` means it stops at the first real error.
+
+### 3. Open it
+
+```bash
 open FileStack.app
 ```
 
-`build.sh` compiles a release build with Swift Package Manager and assembles
-`FileStack.app`, ad-hoc signed so macOS doesn't re-ask for file-access
-permissions on every rebuild.
+Since the app isn't signed by an Apple Developer ID, the first launch may be
+blocked by Gatekeeper. If macOS says it "cannot be opened because Apple
+cannot check it for malicious software": right-click (or Control-click)
+`FileStack.app` → **Open** → confirm **Open** in the dialog. You only need to
+do this once.
 
-To have it launch automatically, drag `FileStack.app` into `/Applications`
-and add it in **System Settings → General → Login Items**.
+FileStack has no Dock icon or main window — look for its icon in the menu
+bar, top right of the screen, next to the clock.
+
+### 4. Install it permanently (optional)
+
+```bash
+mv FileStack.app /Applications/
+```
+
+To have it launch automatically at login, open `/Applications`, right-click
+`FileStack.app` → open it once from there, then add it in **System Settings
+→ General → Login Items**.
 
 ## Usage
 
@@ -62,9 +93,7 @@ and add it in **System Settings → General → Login Items**.
 ## Development
 
 ```bash
-swift build                          # debug build
-.build/debug/FileStack --selftest    # runs the built-in self-check
-./build.sh                           # release build + .app bundle
+.build/debug/FileStack --selftest    # runs the built-in self-check after `swift build`
 ```
 
 There's no Xcode project — this is a plain Swift Package. See
