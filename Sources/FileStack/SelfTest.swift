@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 
 /// Run with `swift run FileStack --selftest` — exercises the one non-trivial logic
@@ -10,6 +11,7 @@ enum SelfTest {
         try! testMoveRemovesOriginal()
         try! testRemoveDeletesEntry()
         try! testReloadRebuildsFromDisk()
+        try! testDragExposesPlainFileURL()
         print("selftest ok")
     }
 
@@ -56,5 +58,17 @@ enum SelfTest {
         _ = try store.add(url: try makeTempSource(), mode: .copy)
         let reopened = StashStore(root: root)
         precondition(reopened.items.count == 1, "reload must rebuild the list from disk")
+    }
+
+    /// Regression guard for the drag-out bug: apps without NSFilePromiseReceiver
+    /// (most Electron/Chromium apps, e.g. Claude desktop) never receive a promised
+    /// file, so the drag must publish a plain "public.file-url" pasteboard type.
+    private static func testDragExposesPlainFileURL() throws {
+        let url = try makeTempSource()
+        let types = (url as NSURL).writableTypes(for: NSPasteboard(name: .drag))
+        precondition(
+            types.contains(NSPasteboard.PasteboardType("public.file-url")),
+            "drag item must expose a plain file URL, not only a file promise"
+        )
     }
 }

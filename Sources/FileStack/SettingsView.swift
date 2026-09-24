@@ -3,6 +3,7 @@ import SwiftUI
 struct SettingsView: View {
     @ObservedObject var store: StashStore
     @AppStorage("language") private var language: AppLanguage = .english
+    @AppStorage("removeAfterDragOut") private var removeAfterDragOut: Bool = false
 
     var body: some View {
         Form {
@@ -12,6 +13,17 @@ struct SettingsView: View {
                 }
             }
             .pickerStyle(.radioGroup)
+
+            Divider()
+
+            Toggle(
+                t(
+                    "Remove file from shelf after dragging it out",
+                    "Datei nach dem Herausziehen aus der Ablage entfernen",
+                    language
+                ),
+                isOn: $removeAfterDragOut
+            )
 
             Divider()
 

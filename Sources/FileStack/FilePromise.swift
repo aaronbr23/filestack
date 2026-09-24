@@ -1,36 +1,5 @@
 import AppKit
 import SwiftUI
-import UniformTypeIdentifiers
-
-/// Drag-out via NSFilePromiseProvider: the stash entry is removed only after the
-/// receiver has actually written the file, never on a plain drag start.
-final class PromiseDelegate: NSObject, NSFilePromiseProviderDelegate {
-    let item: StashItem
-    weak var store: StashStore?
-
-    init(item: StashItem, store: StashStore) {
-        self.item = item
-        self.store = store
-    }
-
-    func filePromiseProvider(_ filePromiseProvider: NSFilePromiseProvider, fileNameForType fileType: String) -> String {
-        item.name
-    }
-
-    func filePromiseProvider(
-        _ filePromiseProvider: NSFilePromiseProvider,
-        writePromiseTo url: URL,
-        completionHandler: @escaping (Error?) -> Void
-    ) {
-        do {
-            try FileManager.default.copyItem(at: item.url, to: url)
-            completionHandler(nil)
-            Task { @MainActor in self.store?.remove(self.item) }
-        } catch {
-            completionHandler(error)
-        }
-    }
-}
 
 /// A whole stash row, drawn and hit-tested entirely in AppKit: an earlier version
 /// only made the small file icon draggable and left the SwiftUI filename/size text
@@ -40,7 +9,6 @@ final class DragSourceView: NSView, NSDraggingSource {
     weak var store: StashStore?
     var onDelete: (() -> Void)?
 
-    private var delegateRef: PromiseDelegate?
     private var trackingArea: NSTrackingArea?
     private var hovering = false { didSet { deleteButton.isHidden = !hovering; needsDisplay = true } }
 
@@ -136,19 +104,40 @@ final class DragSourceView: NSView, NSDraggingSource {
         .copy
     }
 
+    // Plain file-URL drag instead of NSFilePromiseProvider: promise-based drags only
+    // land in apps that implement NSFilePromiseReceiver. Many Electron/Chromium apps
+    // (e.g. Claude desktop) don't, so the promise is never fulfilled — the drop
+    // silently does nothing and the file never leaves Filestack.
     override func mouseDown(with event: NSEvent) {
-        guard let item, let store else { return }
+        guard let item else { return }
         let point = convert(event.locationInWindow, from: nil)
         if deleteButton.frame.contains(point) { return } // let the button's own target/action handle it
 
-        let type = UTType(filenameExtension: item.url.pathExtension) ?? .data
-        let delegate = PromiseDelegate(item: item, store: store)
-        delegateRef = delegate // keep alive for the duration of the drag
-
-        let provider = NSFilePromiseProvider(fileType: type.identifier, delegate: delegate)
-        let dragItem = NSDraggingItem(pasteboardWriter: provider)
+        let dragItem = NSDraggingItem(pasteboardWriter: item.url as NSURL)
         dragItem.setDraggingFrame(imageView.frame, contents: item.icon)
         beginDraggingSession(with: [dragItem], event: event, source: self)
+    }
+
+    // "Remove after drag out" must fire only for drags that actually leave Filestack:
+    // the same panel also hosts the Move/Copy drop zones right above this list, so a
+    // drag ending inside one of our own windows (own panel, not another app) doesn't count.
+    //
+    // The plain file-URL drag (see mouseDown above) gives no completion signal at all —
+    // unlike a file promise, nothing calls back when the destination has actually read
+    // the bytes. `endedAt` only means the OS-level drop was accepted; Electron apps read
+    // the file asynchronously afterward (DOM drop event, then an IPC round-trip to read
+    // it), so deleting immediately here raced Claude's own read and won, deleting the
+    // file out from under it. ponytail: fixed delay, not a real completion signal —
+    // switch to an NSFilePromiseProvider-based deletion callback if this proves flaky.
+    private static let deletionGracePeriod: TimeInterval = 2
+
+    func draggingSession(_ session: NSDraggingSession, endedAt screenPoint: NSPoint, operation: NSDragOperation) {
+        guard operation != [], let item, let store, UserDefaults.standard.bool(forKey: "removeAfterDragOut") else { return }
+        let droppedInsideOwnApp = NSApp.windows.contains { $0.isVisible && $0.frame.contains(screenPoint) }
+        guard !droppedInsideOwnApp else { return }
+        DispatchQueue.main.asyncAfter(deadline: .now() + Self.deletionGracePeriod) {
+            store.remove(item)
+        }
     }
 
     override func menu(for event: NSEvent) -> NSMenu? {
