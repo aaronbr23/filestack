@@ -36,13 +36,17 @@ final class StatusIconView: NSView {
         let name = isFull ? "tray.full.fill" : "tray"
         guard let base = NSImage(systemSymbolName: name, accessibilityDescription: nil),
               let symbol = base.withSymbolConfiguration(.init(pointSize: 15, weight: .medium)) else { return }
-        symbol.isTemplate = true
         let rect = NSRect(
             x: (bounds.width - symbol.size.width) / 2,
             y: (bounds.height - symbol.size.height) / 2,
             width: symbol.size.width, height: symbol.size.height
         )
+        // isTemplate only auto-tints when AppKit draws the image itself (button/image
+        // view); drawing it by hand here always renders the glyph black, invisible on
+        // a dark menu bar. Composite labelColor over the glyph's alpha mask instead.
         symbol.draw(in: rect)
+        NSColor.labelColor.set()
+        rect.fill(using: .sourceAtop)
     }
 
     override func mouseDown(with event: NSEvent) { onActivate?() }
