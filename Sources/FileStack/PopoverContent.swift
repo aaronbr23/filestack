@@ -53,7 +53,10 @@ struct PopoverContent: View {
     /// `showSettingsWindow:` is the underlying AppKit action SwiftUI's Settings
     /// scene registers on the app; sending it directly works from anywhere.
     private func openSettingsWindow() {
-        NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
+        // Activate first: as an accessory app (no Dock icon), our windows only
+        // out-order other apps' windows once we're the active app — sending
+        // showSettingsWindow: before that just reopens it behind everything else.
         NSApp.activate(ignoringOtherApps: true)
+        NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
     }
 }
